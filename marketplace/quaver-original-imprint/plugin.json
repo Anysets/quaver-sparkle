@@ -3,7 +3,7 @@
   "name": "原印象",
   "version": "0.1.80",
   "minHostVersion": "1.7.0",
-  "description": "原印象，复刻熟悉的桌面音乐播放器外观。",
+  "description": "原印象，复刻熟悉的企鹅音乐外观。",
   "category": "theme",
   "main": "main.js"
 }
