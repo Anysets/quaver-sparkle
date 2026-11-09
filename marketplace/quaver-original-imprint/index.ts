@@ -1547,91 +1547,65 @@ function mountPlaybackAppearance(page) {
 export default {
   id: themeId,
   name,
-  version: "0.1.80",
+  version: "0.1.81",
   minHostVersion: "1.7.0",
   kind: "third-party",
   description: "原印象，复刻熟悉的桌面音乐播放器外观。",
   setup(ctx) {
-    ctx.registerThemePack({
+    ctx.registerTheme({
       id: themeId,
       name,
-      preview: [playGreen, textGreen, "#f6f6f6", "#1e1e20"],
-      variants: [{ id: "light", name, css: themeCss }],
+      css: "",
+      tint: { mode: "host" },
+      background: { mode: "host" },
+      menus: { mode: "host" },
+      controlBar: { mode: "host" },
+      playlistMode: { mode: "host" },
     });
 
-    let disposeProgress;
-    let disposeLikedAlbums;
-    let disposePlaybackAppearance;
-    let tintOption;
-    let disposeStickyClip;
-    let disposePlaylistActions;
+    const root = document.documentElement;
+    let disposeAppearance;
     const isGreen = () => ctx.storage.get("highlight") !== "host";
-    const applyHighlight = active => {
-      document.documentElement.toggleAttribute("data-original-imprint-green", active && isGreen());
-    };
-    const setGreen = enabled => {
-      ctx.storage.set("highlight", enabled ? "green" : "host");
-      applyHighlight(true);
-      tintOption?.sync();
-    };
     const syncTheme = () => {
-      const { packId, variantId, suspended } = ctx.style.state();
-      // Unregistering the pack also clears the host's selection. Keep that
-      // distinct from a user switching to the default appearance.
-      if (ctx.style.packs().some(pack => pack.id === themeId)) {
-        if (packId === themeId) {
-          if (ctx.storage.get("selected") !== "1") ctx.storage.set("selected", "1");
-        } else if (ctx.storage.get("selected") === "1") {
-          ctx.storage.remove("selected");
-        }
-      }
-      const active = packId === themeId && !suspended;
-      applyHighlight(active);
-      if (!active) {
-        disposeProgress?.();
-        disposeProgress = undefined;
-        disposeLikedAlbums?.();
-        disposeLikedAlbums = undefined;
-        disposePlaybackAppearance?.();
-        disposePlaybackAppearance = undefined;
-        tintOption?.dispose();
-        tintOption = undefined;
-        disposeStickyClip?.();
-        disposeStickyClip = undefined;
-        disposePlaylistActions?.();
-        disposePlaylistActions = undefined;
+      if (root.dataset.sparkleTheme !== themeId) {
+        disposeAppearance?.();
+        disposeAppearance = undefined;
         return;
       }
-      if (variantId !== "light") {
-        ctx.style.activate(themeId, "light");
-        return;
-      }
+      if (disposeAppearance) return;
+
+      const removeStyles = ctx.style.register({ id: themeId, css: themeCss, order: 1000 });
+      const applyHighlight = () => root.toggleAttribute("data-original-imprint-green", isGreen());
+      applyHighlight();
+
       const bar = document.getElementById("player-bar");
-      if (bar && !disposeProgress) disposeProgress = mountProgress(bar);
       const route = document.getElementById("route");
-      if (route && !disposeLikedAlbums) disposeLikedAlbums = mountLikedAlbums(route, ctx.log);
-      if (route && !tintOption) tintOption = mountTintOption(route, isGreen, setGreen);
-      if (route && !disposeStickyClip) disposeStickyClip = mountStickyClip(route);
-      if (route && !disposePlaylistActions) disposePlaylistActions = mountPlaylistActions(route);
-      tintOption?.sync();
       const page = document.querySelector("body > .np");
-      if (page && !disposePlaybackAppearance) disposePlaybackAppearance = mountPlaybackAppearance(page);
+      const tintOption = route && mountTintOption(route, isGreen, enabled => {
+        ctx.storage.set("highlight", enabled ? "green" : "host");
+        applyHighlight();
+        tintOption?.sync();
+      });
+      const cleanup = [
+        bar && mountProgress(bar),
+        route && mountLikedAlbums(route, ctx.log),
+        route && mountStickyClip(route),
+        route && mountPlaylistActions(route),
+        page && mountPlaybackAppearance(page),
+      ];
+      disposeAppearance = () => {
+        for (const dispose of cleanup) dispose?.();
+        tintOption?.dispose();
+        root.removeAttribute("data-original-imprint-green");
+        removeStyles();
+      };
     };
-    const stop = ctx.style.onChange(syncTheme);
-    const initial = ctx.style.state();
-    if (!initial.packId && !initial.suspended && ctx.storage.get("selected") === "1") {
-      ctx.style.activate(themeId, "light");
-    }
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-sparkle-theme"] });
     syncTheme();
     return () => {
-      stop();
-      disposeProgress?.();
-      disposeLikedAlbums?.();
-      disposePlaybackAppearance?.();
-      tintOption?.dispose();
-      disposeStickyClip?.();
-      disposePlaylistActions?.();
-      applyHighlight(false);
+      observer.disconnect();
+      disposeAppearance?.();
     };
   },
 };
